@@ -1,1 +1,14 @@
+[theme]
+primaryColor = "#FF4B4B"          # Un rojo escolar o el color de tu elección
+backgroundColor = "#FFFFFF"       # Fondo blanco para limpieza
+secondaryBackgroundColor = "#F0F2F6" # Gris claro para los inputs
+textColor = "#31333F"             # Texto oscuro legible
+font = "sans serif"
 
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
