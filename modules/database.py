@@ -3,10 +3,10 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 def init_state():
-    # Conexión con Google Sheets
+    # Conexión con Google Sheets (ttl=0 evita que use datos viejos en cache)
     conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     
-    clases = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
+    clases_default = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
 
     # --- CARGAR REPORTES SEMANALES ---
@@ -14,12 +14,12 @@ def init_state():
         try:
             df_rep = conn.read(worksheet="Reportes")
             if not df_rep.empty:
-                # Convertimos el DataFrame de vuelta al diccionario {Clase: {Dia: Texto}}
+                # Convertimos el DataFrame de la nube al diccionario del programa
                 st.session_state.reportes = df_rep.set_index('Clase').to_dict('index')
             else:
                 raise Exception("Hoja vacía")
         except:
-            st.session_state.reportes = {clase: {dia: "" for dia in dias} for clase in clases}
+            st.session_state.reportes = {clase: {dia: "" for dia in dias} for clase in clases_default}
 
     # --- CARGAR ORDEN ---
     if 'orden_clases' not in st.session_state:
@@ -30,10 +30,11 @@ def init_state():
             else:
                 raise Exception("Hoja vacía")
         except:
-            st.session_state.orden_clases = {clase: i + 1 for i, clase in enumerate(clases)}
+            st.session_state.orden_clases = {clase: i + 1 for i, clase in enumerate(clases_default)}
 
 def save_to_disk():
-    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+    """Guarda los reportes semanales y el orden de las clases en la nube."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
     
     # Guardar Reportes
     df_reportes = pd.DataFrame.from_dict(st.session_state.reportes, orient='index').reset_index()
@@ -45,20 +46,21 @@ def save_to_disk():
     conn.update(worksheet="Orden", data=df_orden)
 
 def save_to_history(fecha, texto):
-    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+    """Guarda una versión final en la pestaña de Histórico."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         df_hist = conn.read(worksheet="Historico")
     except:
         df_hist = pd.DataFrame(columns=['Fecha', 'Reporte'])
     
     nuevo_registro = pd.DataFrame([{'Fecha': str(fecha), 'Reporte': texto}])
-    # Concatenar y limpiar duplicados (misma fecha sobreescribe)
     df_hist = pd.concat([df_hist, nuevo_registro], ignore_index=True)
     df_hist = df_hist.drop_duplicates(subset=['Fecha'], keep='last')
     
     conn.update(worksheet="Historico", data=df_hist)
 
 def get_history():
+    """Trae todos los reportes archivados."""
     conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     try:
         df_hist = conn.read(worksheet="Historico")
@@ -67,7 +69,8 @@ def get_history():
         return {}
 
 def delete_from_history(fecha):
-    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+    """Borra una fila del histórico en la nube."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         df_hist = conn.read(worksheet="Historico")
         df_hist = df_hist[df_hist['Fecha'] != str(fecha)]
