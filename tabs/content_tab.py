@@ -10,16 +10,22 @@ def render():
 
     # --- INDICADORES DE ESTADO (STATUS) ---
     st.write("**Estado de avance:**")
+    st.caption("✅ = Lleno | ❌ = No aplica (nan) | ⚪ = Vacío")
+    
     cols_status = st.columns(5)
     clases_lista = list(st.session_state.reportes.keys())
     
     for i, c in enumerate(clases_lista):
         with cols_status[i % 5]:
-            # Validación segura contra valores None/NaN de Google Sheets
+            # Obtención segura del texto
             texto_raw = st.session_state.reportes[c].get(dia_sel, "")
             if texto_raw is None: texto_raw = ""
+            texto_str = str(texto_raw).strip().lower() # Convertimos a minúsculas para comparar
             
-            if len(str(texto_raw).strip()) > 0:
+            # Lógica de validación visual
+            if texto_str == "nan":
+                st.caption(f"❌ {c}")
+            elif len(texto_str) > 0:
                 st.caption(f"✅ {c}")
             else:
                 st.caption(f"⚪ {c}")
@@ -29,26 +35,21 @@ def render():
     # --- ÁREA DE EDICIÓN ---
     for clase in clases_lista:
         with st.expander(f"Editar: {clase}", expanded=False):
-            # Obtener valor actual de forma segura
             valor_actual = st.session_state.reportes[clase].get(dia_sel, "")
             if valor_actual is None: valor_actual = ""
 
             nuevo_texto = st.text_area(
-                f"Escribe el reporte de {clase}:",
+                f"Escribe el reporte de {clase} (Escribe 'nan' si no aplica):",
                 value=str(valor_actual),
                 key=f"input_{clase}_{dia_sel}",
                 height=150
             )
-            # Actualizamos el estado en memoria
+            # Guardamos en memoria exactamente lo que el usuario escribe
             st.session_state.reportes[clase][dia_sel] = nuevo_texto
 
     st.divider()
     
-    # --- BOTÓN DE GUARDADO ---
     if st.button("💾 Guardar Cambios en la Nube", use_container_width=True, type="primary"):
         save_to_disk()
-        st.success(f"✅ Reportes del {dia_sel} guardados en Google Sheets.")
+        st.success(f"✅ Reportes del {dia_sel} guardados.")
         st.rerun()
-
-if __name__ == "__main__":
-    render()
