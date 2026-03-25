@@ -4,6 +4,33 @@ import os
 
 # Ruta donde se guardará el archivo en el servidor de Streamlit
 DATA_PATH = "data/reportes_guardados.json"
+PATH_HISTORICO = "data/historico_reportes.json"
+
+def save_to_history(fecha, texto_reporte):
+    """Guarda un reporte final asociado a una fecha específica."""
+    historico = {}
+    if os.path.exists(PATH_HISTORICO):
+        try:
+            with open(PATH_HISTORICO, "r", encoding="utf-8") as f:
+                historico = json.load(f)
+        except:
+            historico = {}
+
+    # Guardamos el texto usando la fecha como llave (formato string YYYY-MM-DD)
+    historico[str(fecha)] = texto_reporte
+
+    with open(PATH_HISTORICO, "w", encoding="utf-8") as f:
+        json.dump(historico, f, ensure_ascii=False, indent=4)
+
+def get_history():
+    """Retorna el diccionario completo del histórico."""
+    if os.path.exists(PATH_HISTORICO):
+        try:
+            with open(PATH_HISTORICO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
 
 def init_state():
     clases = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
