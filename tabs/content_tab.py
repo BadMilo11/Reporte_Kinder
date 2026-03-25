@@ -2,73 +2,53 @@ import streamlit as st
 from modules.database import save_to_disk
 
 def render():
-    st.subheader("📝 Gestión de Contenidos")
-    st.info("Selecciona un día y una clase para redactar el reporte correspondiente.")
-
-    # 1. Selectores de filtro
-    col1, col2 = st.columns(2)
-    with col1:
-        # Usamos un índice para que el día persista en el selector al recargar
-        dias_opciones = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
-        dia_sel = st.selectbox("📅 Selecciona el Día", dias_opciones)
+    st.subheader("📝 Contenido de los Reportes")
     
-    with col2:
-        clases_opciones = list(st.session_state.reportes.keys())
-        clase_sel = st.selectbox("🏫 Selecciona la Clase", clases_opciones)
+    dia_sel = st.selectbox("Seleccionar día para editar:", 
+                          ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
+                          key="content_day_sel")
 
-    st.divider()
-
-    # 2. Área de Redacción
-    # Cargamos el texto que ya existe en el estado global
-    texto_actual = st.session_state.reportes[clase_sel][dia_sel]
+    # --- INDICADORES DE ESTADO (STATUS) ---
+    st.write("**Estado de avance:**")
+    cols_status = st.columns(5)
+    clases_lista = list(st.session_state.reportes.keys())
     
-    nuevo_texto = st.text_area(
-        f"Editando: {clase_sel} ({dia_sel})",
-        value=texto_actual,
-        height=250,
-        placeholder="Escribe aquí las actividades, logros o avisos del día..."
-    )
-
-    # 3. Botones de Acción
-    col_btn1, col_btn2 = st.columns(2)
-    
-    with col_btn1:
-        if st.button("💾 Guardar Cambios", use_container_width=True, type="primary"):
-            # Actualizamos la memoria (session_state)
-            st.session_state.reportes[clase_sel][dia_sel] = nuevo_texto
-            # Guardamos físicamente en el archivo JSON
-            save_to_disk()
-            st.toast(f"¡{clase_sel} guardado correctamente!", icon="✅")
-            st.rerun()
-
-    with col_btn2:
-        if st.button("🗑️ Borrar Texto", use_container_width=True):
-            # Limpiamos el texto
-            st.session_state.reportes[clase_sel][dia_sel] = ""
-            save_to_disk()
-            st.toast("Contenido eliminado", icon="🗑️")
-            st.rerun()
-
-    # 4. Monitor de Progreso (Visualización de Estatus)
-    st.divider()
-    st.markdown(f"### 📊 Estatus del {dia_sel}")
-    
-    # Mostramos una lista rápida de qué clases tienen contenido y cuáles no
-    cols_status = st.columns(2)
-    items = list(st.session_state.reportes.keys())
-    mitad = len(items) // 2
-    
-    with cols_status[0]:
-        for c in items[:mitad]:
-            tiene_texto = bool(st.session_state.reportes[c][dia_sel].strip())
-            icon = "✅" if tiene_texto else "❌"
-            st.write(f"{icon} {c}")
+    for i, c in enumerate(clases_lista):
+        with cols_status[i % 5]:
+            # Validación segura contra valores None/NaN de Google Sheets
+            texto_raw = st.session_state.reportes[c].get(dia_sel, "")
+            if texto_raw is None: texto_raw = ""
             
-    with cols_status[1]:
-        for c in items[mitad:]:
-            tiene_texto = bool(st.session_state.reportes[c][dia_sel].strip())
-            icon = "✅" if tiene_texto else "❌"
-            st.write(f"{icon} {c}")
+            if len(str(texto_raw).strip()) > 0:
+                st.caption(f"✅ {c}")
+            else:
+                st.caption(f"⚪ {c}")
+
+    st.divider()
+
+    # --- ÁREA DE EDICIÓN ---
+    for clase in clases_lista:
+        with st.expander(f"Editar: {clase}", expanded=False):
+            # Obtener valor actual de forma segura
+            valor_actual = st.session_state.reportes[clase].get(dia_sel, "")
+            if valor_actual is None: valor_actual = ""
+
+            nuevo_texto = st.text_area(
+                f"Escribe el reporte de {clase}:",
+                value=str(valor_actual),
+                key=f"input_{clase}_{dia_sel}",
+                height=150
+            )
+            # Actualizamos el estado en memoria
+            st.session_state.reportes[clase][dia_sel] = nuevo_texto
+
+    st.divider()
+    
+    # --- BOTÓN DE GUARDADO ---
+    if st.button("💾 Guardar Cambios en la Nube", use_container_width=True, type="primary"):
+        save_to_disk()
+        st.success(f"✅ Reportes del {dia_sel} guardados en Google Sheets.")
+        st.rerun()
 
 if __name__ == "__main__":
     render()
