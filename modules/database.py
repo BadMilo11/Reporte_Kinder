@@ -1,81 +1,77 @@
 import streamlit as st
-import json
-import os
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
-# Ruta donde se guardará el archivo en el servidor de Streamlit
-DATA_PATH = "data/reportes_guardados.json"
-PATH_HISTORICO = "data/historico_reportes.json"
-
-def save_to_history(fecha, texto_reporte):
-    """Guarda un reporte final asociado a una fecha específica."""
-    historico = {}
-    if os.path.exists(PATH_HISTORICO):
-        try:
-            with open(PATH_HISTORICO, "r", encoding="utf-8") as f:
-                historico = json.load(f)
-        except:
-            historico = {}
-
-    # Guardamos el texto usando la fecha como llave (formato string YYYY-MM-DD)
-    historico[str(fecha)] = texto_reporte
-
-    with open(PATH_HISTORICO, "w", encoding="utf-8") as f:
-        json.dump(historico, f, ensure_ascii=False, indent=4)
-
-def get_history():
-    """Retorna el diccionario completo del histórico."""
-    if os.path.exists(PATH_HISTORICO):
-        try:
-            with open(PATH_HISTORICO, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-    
-def delete_from_history(fecha):
-    """Elimina una entrada específica del archivo histórico."""
-    historico = get_history()
-    if str(fecha) in historico:
-        del historico[str(fecha)]
-        with open(PATH_HISTORICO, "w", encoding="utf-8") as f:
-            json.dump(historico, f, ensure_ascii=False, indent=4)
-        return True
-    return False
-    
 def init_state():
+    # Conexión con Google Sheets
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    
     clases = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
 
+    # --- CARGAR REPORTES SEMANALES ---
     if 'reportes' not in st.session_state:
-        success_load = False
-        if os.path.exists(DATA_PATH):
-            try:
-                with open(DATA_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    # Cargamos reportes
-                    st.session_state.reportes = data.get("reportes", {clase: {dia: "" for dia in dias} for clase in clases})
-                    # Cargamos orden
-                    st.session_state.orden_clases = data.get("orden", {clase: i + 1 for i, clase in enumerate(clases)})
-                    success_load = True
-            except:
-                pass
-        
-        if not success_load:
+        try:
+            df_rep = conn.read(worksheet="Reportes")
+            if not df_rep.empty:
+                # Convertimos el DataFrame de vuelta al diccionario {Clase: {Dia: Texto}}
+                st.session_state.reportes = df_rep.set_index('Clase').to_dict('index')
+            else:
+                raise Exception("Hoja vacía")
+        except:
             st.session_state.reportes = {clase: {dia: "" for dia in dias} for clase in clases}
+
+    # --- CARGAR ORDEN ---
+    if 'orden_clases' not in st.session_state:
+        try:
+            df_ord = conn.read(worksheet="Orden")
+            if not df_ord.empty:
+                st.session_state.orden_clases = df_ord.set_index('Clase')['Posicion'].to_dict()
+            else:
+                raise Exception("Hoja vacía")
+        except:
             st.session_state.orden_clases = {clase: i + 1 for i, clase in enumerate(clases)}
 
 def save_to_disk():
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Guardamos AMBOS diccionarios en el mismo JSON
-    payload = {
-        "reportes": st.session_state.reportes,
-        "orden": st.session_state.orden_clases
-    }
-    with open(DATA_PATH, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=4)
+    # Guardar Reportes
+    df_reportes = pd.DataFrame.from_dict(st.session_state.reportes, orient='index').reset_index()
+    df_reportes.rename(columns={'index': 'Clase'}, inplace=True)
+    conn.update(worksheet="Reportes", data=df_reportes)
+    
+    # Guardar Orden
+    df_orden = pd.DataFrame(list(st.session_state.orden_clases.items()), columns=['Clase', 'Posicion'])
+    conn.update(worksheet="Orden", data=df_orden)
 
-if __name__ == "__main__":
-    # Prueba rápida de inicialización
-    init_state()
+def save_to_history(fecha, texto):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        df_hist = conn.read(worksheet="Historico")
+    except:
+        df_hist = pd.DataFrame(columns=['Fecha', 'Reporte'])
+    
+    nuevo_registro = pd.DataFrame([{'Fecha': str(fecha), 'Reporte': texto}])
+    # Concatenar y limpiar duplicados (misma fecha sobreescribe)
+    df_hist = pd.concat([df_hist, nuevo_registro], ignore_index=True)
+    df_hist = df_hist.drop_duplicates(subset=['Fecha'], keep='last')
+    
+    conn.update(worksheet="Historico", data=df_hist)
+
+def get_history():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        df_hist = conn.read(worksheet="Historico")
+        return df_hist.set_index('Fecha')['Reporte'].to_dict()
+    except:
+        return {}
+
+def delete_from_history(fecha):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        df_hist = conn.read(worksheet="Historico")
+        df_hist = df_hist[df_hist['Fecha'] != str(fecha)]
+        conn.update(worksheet="Historico", data=df_hist)
+        return True
+    except:
+        return False
