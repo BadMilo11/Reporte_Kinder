@@ -31,7 +31,17 @@ def get_history():
         except:
             return {}
     return {}
-
+    
+def delete_from_history(fecha):
+    """Elimina una entrada específica del archivo histórico."""
+    historico = get_history()
+    if str(fecha) in historico:
+        del historico[str(fecha)]
+        with open(PATH_HISTORICO, "w", encoding="utf-8") as f:
+            json.dump(historico, f, ensure_ascii=False, indent=4)
+        return True
+    return False
+    
 def init_state():
     clases = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
