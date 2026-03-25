@@ -4,7 +4,7 @@ import pandas as pd
 
 def init_state():
     # Conexión con Google Sheets
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     
     clases = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
@@ -33,7 +33,7 @@ def init_state():
             st.session_state.orden_clases = {clase: i + 1 for i, clase in enumerate(clases)}
 
 def save_to_disk():
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     
     # Guardar Reportes
     df_reportes = pd.DataFrame.from_dict(st.session_state.reportes, orient='index').reset_index()
@@ -45,7 +45,7 @@ def save_to_disk():
     conn.update(worksheet="Orden", data=df_orden)
 
 def save_to_history(fecha, texto):
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     try:
         df_hist = conn.read(worksheet="Historico")
     except:
@@ -59,7 +59,7 @@ def save_to_history(fecha, texto):
     conn.update(worksheet="Historico", data=df_hist)
 
 def get_history():
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     try:
         df_hist = conn.read(worksheet="Historico")
         return df_hist.set_index('Fecha')['Reporte'].to_dict()
@@ -67,7 +67,7 @@ def get_history():
         return {}
 
 def delete_from_history(fecha):
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
     try:
         df_hist = conn.read(worksheet="Historico")
         df_hist = df_hist[df_hist['Fecha'] != str(fecha)]
