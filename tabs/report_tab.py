@@ -117,5 +117,5 @@ def render():
             
             if st.button("🗑️ Eliminar registro", use_container_width=True):
                 if delete_from_history(fecha_busqueda):
-                    st.toast("Eliminado de la nube")
+                    st.success("Registro eliminado de la nube.")
                     st.rerun()
