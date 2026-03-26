@@ -3,8 +3,8 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 def init_state():
-    # Conexión con Google Sheets (ttl=0 evita que use datos viejos en cache)
-    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+    # Conexión con Google Sheets
+    conn = st.connection("gsheets", type=GSheetsConnection)
     
     clases_default = ["Saludo", "Música", "Lunch", "Arte", "Mini Ciudad", "Neuro", "Terraza", "Cuento", "Personalizado", "Despedida"]
     dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
@@ -12,9 +12,9 @@ def init_state():
     # --- CARGAR REPORTES SEMANALES ---
     if 'reportes' not in st.session_state:
         try:
-            df_rep = conn.read(worksheet="Reportes")
+            # Forzamos ttl=0 aquí para que lea siempre lo último
+            df_rep = conn.read(worksheet="Reportes", ttl=0)
             if not df_rep.empty:
-                # Convertimos el DataFrame de la nube al diccionario del programa
                 st.session_state.reportes = df_rep.set_index('Clase').to_dict('index')
             else:
                 raise Exception("Hoja vacía")
@@ -24,7 +24,7 @@ def init_state():
     # --- CARGAR ORDEN ---
     if 'orden_clases' not in st.session_state:
         try:
-            df_ord = conn.read(worksheet="Orden")
+            df_ord = conn.read(worksheet="Orden", ttl=0)
             if not df_ord.empty:
                 st.session_state.orden_clases = df_ord.set_index('Clase')['Posicion'].to_dict()
             else:
@@ -33,7 +33,7 @@ def init_state():
             st.session_state.orden_clases = {clase: i + 1 for i, clase in enumerate(clases_default)}
 
 def save_to_disk():
-    """Guarda los reportes semanales y el orden de las clases en la nube."""
+    """Guarda los reportes y limpia el caché para que la siguiente lectura sea fresca."""
     conn = st.connection("gsheets", type=GSheetsConnection)
     
     # Guardar Reportes
@@ -44,12 +44,15 @@ def save_to_disk():
     # Guardar Orden
     df_orden = pd.DataFrame(list(st.session_state.orden_clases.items()), columns=['Clase', 'Posicion'])
     conn.update(worksheet="Orden", data=df_orden)
+    
+    # LIMPIEZA DE CACHÉ: Vital para que la app "olvide" los datos viejos
+    st.cache_data.clear()
 
 def save_to_history(fecha, texto):
-    """Guarda una versión final en la pestaña de Histórico."""
+    """Guarda en histórico y limpia caché."""
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        df_hist = conn.read(worksheet="Historico")
+        df_hist = conn.read(worksheet="Historico", ttl=0)
     except:
         df_hist = pd.DataFrame(columns=['Fecha', 'Reporte'])
     
@@ -58,23 +61,26 @@ def save_to_history(fecha, texto):
     df_hist = df_hist.drop_duplicates(subset=['Fecha'], keep='last')
     
     conn.update(worksheet="Historico", data=df_hist)
+    st.cache_data.clear()
 
 def get_history():
-    """Trae todos los reportes archivados."""
-    conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
+    """Trae el histórico sin usar datos guardados en memoria."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        df_hist = conn.read(worksheet="Historico")
+        # El ttl=0 aquí es lo que hace que al borrar algo desaparezca de la lista
+        df_hist = conn.read(worksheet="Historico", ttl=0)
         return df_hist.set_index('Fecha')['Reporte'].to_dict()
     except:
         return {}
 
 def delete_from_history(fecha):
-    """Borra una fila del histórico en la nube."""
+    """Borra de la nube y resetea el caché."""
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        df_hist = conn.read(worksheet="Historico")
+        df_hist = conn.read(worksheet="Historico", ttl=0)
         df_hist = df_hist[df_hist['Fecha'] != str(fecha)]
         conn.update(worksheet="Historico", data=df_hist)
+        st.cache_data.clear()
         return True
     except:
         return False
