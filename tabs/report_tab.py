@@ -10,18 +10,22 @@ def render():
 
     if not ver_historico:
         st.markdown("### 1. Generar Reporte del Día")
+        
+        # Selector de día
         dia_sel = st.selectbox(
             "Selecciona el día de la semana:", 
             ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
             key="report_day_sel"
         )
 
-        # --- LÓGICA DE GENERACIÓN ---
-        # Usamos session_state para que el texto sea persistente pero editable
+        # Inicializamos variables en el estado de la sesión si no existen
         if 'texto_reporte_final' not in st.session_state:
             st.session_state.texto_reporte_final = ""
+        if 'report_key_counter' not in st.session_state:
+            st.session_state.report_key_counter = 0
 
-        if st.button("🔄 Generar / Actualizar Reporte", use_container_width=True):
+        # --- BOTÓN DE GENERACIÓN FORZADA ---
+        if st.button("🔄 Generar / Actualizar Reporte", use_container_width=True, type="secondary"):
             clases_ordenadas = sorted(st.session_state.orden_clases.items(), key=lambda x: x[1])
             nuevo_cuerpo = ""
             
@@ -30,25 +34,30 @@ def render():
                 if texto_clase is None: texto_clase = ""
                 
                 contenido = str(texto_clase).strip()
-                # Filtramos los "nan" y vacíos
                 if contenido and contenido.lower() != "nan":
                     nuevo_cuerpo += f"{contenido}\n\n"
             
+            # 1. Actualizamos el contenido
             st.session_state.texto_reporte_final = nuevo_cuerpo.strip()
-            st.rerun() # Forzamos recarga para que el text_area vea el cambio
+            # 2. Incrementamos el contador para cambiar la KEY del text_area y forzar el refresco visual
+            st.session_state.report_key_counter += 1
+            st.rerun()
 
-        # Cuadro de edición final conectado al session_state
-        if st.session_state.texto_reporte_final:
-            resultado_final = st.text_area(
-                "Edita el reporte final (los 'nan' han sido filtrados):", 
-                value=st.session_state.texto_reporte_final, 
-                height=350,
-                key="final_report_area"
-            )
-            
-            # Actualizamos el state con lo que la maestra escriba manualmente
-            st.session_state.texto_reporte_final = resultado_final
+        # Cuadro de edición final
+        # Usamos una key dinámica: "final_area_0", "final_area_1", etc.
+        dynamic_key = f"final_report_area_{st.session_state.report_key_counter}"
+        
+        resultado_final = st.text_area(
+            "Edita el reporte final (los 'nan' han sido filtrados):", 
+            value=st.session_state.texto_reporte_final, 
+            height=350,
+            key=dynamic_key
+        )
+        
+        # Sincronizamos lo que la maestra escriba manualmente con el session_state
+        st.session_state.texto_reporte_final = resultado_final
 
+        if resultado_final.strip():
             # Botón de Copiado
             if st.button("📱 Copiar al Portapapeles", use_container_width=True, type="primary"):
                 texto_para_js = resultado_final.replace("\n", "\\n").replace("'", "\\'").replace("`", "\\`")
@@ -71,39 +80,26 @@ def render():
 
             st.divider()
 
-            # --- SECCIÓN DE GUARDADO EN GOOGLE SHEETS ---
+            # --- SECCIÓN DE GUARDADO EN HISTÓRICO ---
             st.markdown("### 2. Archivar en Histórico")
             fecha_reporte = st.date_input("Fecha del reporte:", value=date.today(), key="date_hist")
             
             if st.button("💾 Guardar en Historial (Nube)", use_container_width=True):
                 save_to_history(fecha_reporte, resultado_final)
-                st.success(f"✅ Reporte del {fecha_reporte} guardado en Google Sheets.")
+                st.success(f"✅ Reporte del {fecha_reporte} guardado en la pestaña Historial.")
         else:
-            st.info("Presiona el botón de arriba para generar el texto del reporte.")
+            st.info("Presiona el botón 'Generar' para cargar la información del día.")
 
     else:
-        # --- MODO 2: CONSULTAR HISTÓRICO ---
+        # --- MODO CONSULTAR (Se mantiene igual) ---
         st.markdown("### 🔍 Buscador de Reportes Pasados")
         historico_data = get_history()
-        
         if not historico_data:
             st.info("No hay reportes guardados en la nube.")
         else:
             fechas_disponibles = sorted(historico_data.keys(), reverse=True)
             fecha_busqueda = st.selectbox("Selecciona una fecha:", fechas_disponibles)
-            texto_antiguo = historico_data[fecha_busqueda]
-            
-            st.text_area("Contenido archivado:", value=texto_antiguo, height=250, key="old_report_view")
-            
-            col_h1, col_h2 = st.columns(2)
-            with col_h1:
-                # El botón de copiar histórico también se beneficia del JS anterior
-                if st.button("📋 Copiar antiguo", use_container_width=True):
-                     st.warning("Usa el botón de copiar de la pestaña principal o implementa el JS aquí.")
-            with col_h2:
-                if st.button("🗑️ Eliminar registro", use_container_width=True):
-                    if delete_from_history(fecha_busqueda):
-                        st.rerun()
-
-if __name__ == "__main__":
-    render()
+            st.text_area("Contenido archivado:", value=historico_data[fecha_busqueda], height=250)
+            if st.button("🗑️ Eliminar registro", use_container_width=True):
+                if delete_from_history(fecha_busqueda):
+                    st.rerun()
