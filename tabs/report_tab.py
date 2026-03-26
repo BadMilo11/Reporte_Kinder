@@ -8,14 +8,17 @@ def render():
     
     # --- FUNCIÓN PARA FORZAR RECARGA ---
     def al_cambiar_historico():
-        # Si el checkbox se activa, limpiamos el estado de reportes para obligar a leer de la nube
-        if st.session_state.check_hist:
-            # Borramos del session_state para que init_state() vuelva a leer de Google Sheets
-            if 'reportes' in st.session_state:
-                del st.session_state['reportes']
-            if 'orden_clases' in st.session_state:
-                del st.session_state['orden_clases']
-            init_state() # Recarga todo fresco desde la nube
+        # Verificamos primero si la llave existe en el estado de la sesión
+        if 'check_hist' in st.session_state and st.session_state.check_hist:
+            # Solo si el usuario ACTIVÓ el checkbox, refrescamos los datos de la nube
+            with st.spinner("🔄 Sincronizando con Google Sheets..."):
+                if 'reportes' in st.session_state:
+                    del st.session_state['reportes']
+                if 'orden_clases' in st.session_state:
+                    del st.session_state['orden_clases']
+                
+                # Volvemos a inicializar todo desde la nube
+                init_state()
 
     # Switch de navegación con el disparador de recarga
     ver_historico = st.checkbox(
