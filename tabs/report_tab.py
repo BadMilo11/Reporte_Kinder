@@ -6,21 +6,18 @@ from datetime import date
 def render():
     st.subheader("📋 Reporte Final e Historial")
     
-    # --- FUNCIÓN PARA FORZAR RECARGA ---
+    # --- FUNCIÓN PARA FORZAR RECARGA SEGURA ---
     def al_cambiar_historico():
-        # Verificamos primero si la llave existe en el estado de la sesión
         if 'check_hist' in st.session_state and st.session_state.check_hist:
-            # Solo si el usuario ACTIVÓ el checkbox, refrescamos los datos de la nube
             with st.spinner("🔄 Sincronizando con Google Sheets..."):
+                # Forzamos la limpieza de la memoria temporal
+                st.cache_data.clear()
                 if 'reportes' in st.session_state:
                     del st.session_state['reportes']
                 if 'orden_clases' in st.session_state:
                     del st.session_state['orden_clases']
-                
-                # Volvemos a inicializar todo desde la nube
                 init_state()
 
-    # Switch de navegación con el disparador de recarga
     ver_historico = st.checkbox(
         "🔍 Consultar / Gestionar historial de reportes", 
         key="check_hist",
@@ -30,12 +27,7 @@ def render():
     if not ver_historico:
         # --- MODO 1: GENERAR Y GUARDAR ---
         st.markdown("### 1. Generar Reporte del Día")
-        
-        dia_sel = st.selectbox(
-            "Selecciona el día de la semana:", 
-            ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
-            key="report_day_sel"
-        )
+        dia_sel = st.selectbox("Selecciona día:", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"], key="report_day_sel")
 
         if 'texto_reporte_final' not in st.session_state:
             st.session_state.texto_reporte_final = ""
@@ -45,12 +37,9 @@ def render():
         if st.button("🔄 Generar / Actualizar Reporte", use_container_width=True, type="secondary"):
             clases_ordenadas = sorted(st.session_state.orden_clases.items(), key=lambda x: x[1])
             nuevo_cuerpo = ""
-            
             for clase, pos in clases_ordenadas:
                 texto_clase = st.session_state.reportes[clase].get(dia_sel, "")
-                if texto_clase is None: texto_clase = ""
-                
-                contenido = str(texto_clase).strip()
+                contenido = str(texto_clase).strip() if texto_clase else ""
                 if contenido and contenido.lower() != "nan":
                     nuevo_cuerpo += f"{contenido}\n\n"
             
@@ -59,63 +48,38 @@ def render():
             st.rerun()
 
         dynamic_key = f"final_report_area_{st.session_state.report_key_counter}"
-        
-        resultado_final = st.text_area(
-            "Edita el reporte final (los 'nan' han sido filtrados):", 
-            value=st.session_state.texto_reporte_final, 
-            height=350,
-            key=dynamic_key
-        )
-        
+        resultado_final = st.text_area("Reporte final:", value=st.session_state.texto_reporte_final, height=350, key=dynamic_key)
         st.session_state.texto_reporte_final = resultado_final
 
         if resultado_final.strip():
-            # Botón de Copiado
             if st.button("📱 Copiar al Portapapeles", use_container_width=True, type="primary"):
-                texto_para_js = resultado_final.replace("\n", "\\n").replace("'", "\\'").replace("`", "\\`")
-                components.html(f"""
-                    <script>
-                    (function() {{
-                        const textArea = document.createElement("textarea");
-                        textArea.value = `{texto_para_js}`;
-                        textArea.style.position = "fixed";
-                        textArea.style.left = "-9999px";
-                        document.body.appendChild(textArea);
-                        textArea.focus();
-                        textArea.select();
-                        document.execCommand('copy');
-                        alert("✅ ¡Copiado al portapapeles!");
-                        document.body.removeChild(textArea);
-                    }})();
-                    </script>
-                """, height=0)
+                texto_js = resultado_final.replace("\n", "\\n").replace("'", "\\'").replace("`", "\\`")
+                components.html(f"<script>navigator.clipboard.writeText(`{texto_js}`); alert('✅ Copiado');</script>", height=0)
 
             st.divider()
-
-            st.markdown("### 2. Archivar en Histórico")
-            fecha_reporte = st.date_input("Fecha del reporte:", value=date.today(), key="date_hist")
-            
-            if st.button("💾 Guardar en Historial (Nube)", use_container_width=True):
+            st.markdown("### 2. Archivar")
+            fecha_reporte = st.date_input("Fecha:", value=date.today(), key="date_hist")
+            if st.button("💾 Guardar en Historial", use_container_width=True):
                 save_to_history(fecha_reporte, resultado_final)
-                st.success(f"✅ Reporte del {fecha_reporte} guardado.")
+                st.success("✅ Guardado en la nube.")
 
     else:
         # --- MODO 2: CONSULTAR HISTÓRICO ---
         st.markdown("### 🔍 Buscador de Reportes Pasados")
-        # Aquí get_history ya tiene ttl=0 en database.py, así que leerá lo último
         historico_data = get_history()
         
         if not historico_data:
-            st.info("No hay reportes guardados en la nube.")
+            st.info("No hay reportes en la nube.")
         else:
             fechas_disponibles = sorted(historico_data.keys(), reverse=True)
-            fecha_busqueda = st.selectbox("Selecciona una fecha:", fechas_disponibles)
+            fecha_busqueda = st.selectbox("Selecciona fecha:", fechas_disponibles)
+            st.text_area("Contenido:", value=historico_data[fecha_busqueda], height=250, key="hist_view")
             
-            texto_archivado = historico_data[fecha_busqueda]
-            
-            st.text_area("Contenido archivado:", value=texto_archivado, height=250, key="hist_view_area")
-            
-            if st.button("🗑️ Eliminar registro", use_container_width=True):
-                if delete_from_history(fecha_busqueda):
-                    st.success("Registro eliminado de la nube.")
-                    st.rerun()
+            if st.button("🗑️ Eliminar registro permanentemente", use_container_width=True):
+                with st.spinner("Eliminando..."):
+                    if delete_from_history(fecha_busqueda):
+                        st.cache_data.clear() # Limpieza extra
+                        st.rerun()
+
+if __name__ == "__main__":
+    render()
