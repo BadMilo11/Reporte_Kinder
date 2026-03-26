@@ -52,9 +52,35 @@ def render():
         st.session_state.texto_reporte_final = resultado_final
 
         if resultado_final.strip():
+            # Botón de Copiado con API Moderna
             if st.button("📱 Copiar al Portapapeles", use_container_width=True, type="primary"):
-                texto_js = resultado_final.replace("\n", "\\n").replace("'", "\\'").replace("`", "\\`")
-                components.html(f"<script>navigator.clipboard.writeText(`{texto_js}`); alert('✅ Copiado');</script>", height=0)
+                # Preparamos el texto escapando saltos de línea y comillas
+                texto_js = resultado_final.replace("\\", "\\\\").replace("\n", "\\n").replace("'", "\\'").replace("`", "\\`")
+                components.html(f"""
+                    <script>
+                    const copiarTexto = async () => {{
+                        try {{
+                            // Intentar usar la API moderna de portapapeles
+                            await navigator.clipboard.writeText(`{texto_js}`);
+                            alert("✅ ¡Reporte copiado con éxito!");
+                        }} catch (err) {{
+                            // Si falla (por permisos), intentar el método antiguo como respaldo
+                            const textArea = document.createElement("textarea");
+                            textArea.value = `{texto_js}`;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            try {{
+                                document.execCommand('copy');
+                                alert("✅ ¡Copiado!");
+                            }} catch (err2) {{
+                                alert("❌ Error al copiar. Intenta seleccionar y copiar manualmente.");
+                            }}
+                            document.body.removeChild(textArea);
+                        }}
+                    }};
+                    copiarTexto();
+                    </script>
+                """, height=0)
 
             st.divider()
             st.markdown("### 2. Archivar")
